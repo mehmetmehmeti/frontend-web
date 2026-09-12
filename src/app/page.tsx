@@ -295,8 +295,12 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
         <section className="viewer-panel">
           <div className="viewer-header">
             <div>
-              <h2>{activeStream?.title || "No stream selected"}</h2>
-              <p>{activeStream ? `${activeStream.device_id} · ${activeStream.status}` : "Start a stream to create a command."}</p>
+              <h2>{activeStream?.title || "Embedded Live Viewer"}</h2>
+              <p>
+                {activeStream
+                  ? `${activeStream.device_id} · ${activeStream.status} · mediasoup WebRTC`
+                  : "Start a stream to publish edge video into the cloud viewer."}
+              </p>
             </div>
             <select
               value={activeStream?.id || ""}

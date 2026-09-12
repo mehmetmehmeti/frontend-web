@@ -297,6 +297,45 @@ select {
   font-weight: 700;
 }
 
+.viewer-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+}
+
+.media-health,
+.viewer-tool-button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.media-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+}
+
+.media-health.online {
+  color: var(--accent);
+}
+
+.viewer-tool-button {
+  width: 30px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
 .viewer-status.live {
   color: var(--accent);
 }

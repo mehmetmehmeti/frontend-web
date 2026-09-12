@@ -9,7 +9,7 @@ import type {
   Transport,
   TransportOptions,
 } from "mediasoup-client/types";
-import { MonitorPlay, Radio, Square } from "lucide-react";
+import { MonitorPlay, PlugZap, Radio, RefreshCw, Square } from "lucide-react";
 
 const DEFAULT_MEDIA_SERVER_URL = "http://localhost:3010";
 const DEFAULT_VIEWER_TOKEN = "local-viewer-token";
@@ -22,6 +22,13 @@ type ViewerSession = {
 type LiveStreamViewerProps = {
   streamId?: string | null;
   status?: string | null;
+};
+
+type MediaHealth = {
+  ok: boolean;
+  streams: Array<{ streamId: string; viewers: number }>;
+  whipSessions: number;
+  viewers: number;
 };
 
 function mediaServerBaseUrl() {
@@ -42,6 +49,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
 
   const [viewerState, setViewerState] = useState<"idle" | "connecting" | "live" | "error">("idle");
   const [message, setMessage] = useState("Waiting for live stream.");
+  const [health, setHealth] = useState<MediaHealth | null>(null);
 
   const canWatch = Boolean(streamId) && status === "live";
   const streamLabel = useMemo(() => streamId ?? "", [streamId]);
@@ -106,6 +114,12 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     }
 
     setViewerState("idle");
+    setMessage("Viewer stopped.");
+  }
+
+  async function refreshHealth() {
+    const payload = await request<MediaHealth>("/api/health");
+    setHealth(payload);
   }
 
   async function startViewer() {
@@ -176,6 +190,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
 
     setViewerState("live");
     setMessage("Live WebRTC stream connected.");
+    void refreshHealth().catch(() => undefined);
   }
 
   useEffect(() => {
@@ -196,7 +211,13 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   }, [canWatch, streamLabel, status]);
 
   useEffect(() => {
+    void refreshHealth().catch(() => undefined);
+    const timer = window.setInterval(() => {
+      void refreshHealth().catch(() => setHealth(null));
+    }, 4000);
+
     return () => {
+      window.clearInterval(timer);
       void stopViewer();
     };
   }, []);
@@ -204,6 +225,35 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   return (
     <div className="live-viewer">
       <video ref={videoRef} className="video-player" controls autoPlay muted playsInline />
+      <div className="viewer-toolbar">
+        <span className={health?.ok ? "media-health online" : "media-health"}>
+          <PlugZap size={14} />
+          {health?.ok ? `${health.streams.length} media stream${health.streams.length === 1 ? "" : "s"}` : "media server"}
+        </span>
+        <button
+          className="viewer-tool-button"
+          type="button"
+          disabled={!canWatch || viewerState === "connecting"}
+          onClick={() => {
+            void startViewer().catch((error) => {
+              setViewerState("error");
+              setMessage(error instanceof Error ? error.message : "Viewer failed.");
+            });
+          }}
+          title="Reconnect viewer"
+        >
+          <RefreshCw size={14} />
+        </button>
+        <button
+          className="viewer-tool-button"
+          type="button"
+          disabled={viewerState === "idle"}
+          onClick={() => void stopViewer()}
+          title="Stop viewer"
+        >
+          <Square size={14} />
+        </button>
+      </div>
       {viewerState !== "live" && (
         <div className="empty-viewer live-overlay">
           <MonitorPlay size={42} />
