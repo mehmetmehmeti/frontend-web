@@ -13,6 +13,7 @@ import {
   UserPlus,
   Video,
 } from "lucide-react";
+import { LiveStreamViewer } from "@/components/live-stream-viewer";
 import { useSyncRefresh } from "@/hooks/use-sync-refresh";
 import {
   listCommands,
@@ -193,6 +194,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const activeRecording = state.videos.find(
     (video) => video.stream_id === activeStream?.id && video.status === "recording",
   );
+  const activeMediaStreamId = activeStream?.mediasoup_stream_id || activeStream?.id;
 
   const runAction = async (action: () => Promise<unknown>) => {
     setError("");
@@ -307,12 +309,12 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
               ))}
             </select>
           </div>
-          {activeStream?.playback_url ? (
-            <video className="video-player" src={activeStream.playback_url} controls autoPlay muted />
+          {activeStream ? (
+            <LiveStreamViewer streamId={activeMediaStreamId} status={activeStream.status} />
           ) : (
             <div className="empty-viewer">
               <MonitorPlay size={42} />
-              <p>Waiting for the edge device to publish a playback URL.</p>
+              <p>Waiting for the edge device to publish a live stream.</p>
             </div>
           )}
         </section>

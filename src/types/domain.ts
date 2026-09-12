@@ -23,6 +23,8 @@ export type Stream = {
   device_id: string;
   title: string;
   status: "offline" | "starting" | "live" | "stopping" | "ended" | "error";
+  mediasoup_stream_id?: string | null;
+  mediasoup_producer_id?: string | null;
   playback_url?: string | null;
   started_at?: string | null;
   ended_at?: string | null;

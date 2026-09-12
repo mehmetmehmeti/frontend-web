@@ -255,12 +255,54 @@ select {
   align-items: center;
 }
 
+.live-viewer,
 .video-player,
 .empty-viewer {
   width: 100%;
   min-height: 420px;
   border-radius: 8px;
   background: #101613;
+}
+
+.live-viewer {
+  position: relative;
+  overflow: hidden;
+}
+
+.live-viewer .video-player {
+  display: block;
+  height: 100%;
+  min-height: 420px;
+}
+
+.live-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
+.viewer-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.viewer-status.live {
+  color: var(--accent);
+}
+
+.viewer-status.error {
+  color: var(--danger);
 }
 
 .empty-viewer {
@@ -337,8 +379,13 @@ select {
     justify-content: space-between;
   }
 
+  .live-viewer,
   .video-player,
   .empty-viewer {
+    min-height: 260px;
+  }
+
+  .live-viewer .video-player {
     min-height: 260px;
   }
 }
