@@ -51,7 +51,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   const [message, setMessage] = useState("Waiting for live stream.");
   const [health, setHealth] = useState<MediaHealth | null>(null);
 
-  const canWatch = Boolean(streamId) && status === "live";
+  const canWatch = Boolean(streamId) && String(status || "").toLowerCase() === "live";
   const streamLabel = useMemo(() => streamId ?? "", [streamId]);
 
   async function request<T>(path: string, init: RequestInit = {}) {

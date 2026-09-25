@@ -177,19 +177,34 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
     void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : "Load failed."));
   }, [refresh]);
 
+  const selectedStream = useMemo(
+    () => state.streams.find((stream) => stream.id === selectedStreamId),
+    [selectedStreamId, state.streams],
+  );
+  const liveStream = useMemo(
+    () => state.streams.find((stream) => stream.status === "live" && (stream.mediasoup_stream_id || stream.id)),
+    [state.streams],
+  );
   const activeStream = useMemo(
     () =>
-      state.streams.find((stream) => stream.id === selectedStreamId) ||
-      state.streams.find((stream) => ["starting", "live", "stopping"].includes(stream.status)) ||
-      state.streams[0],
-    [selectedStreamId, state.streams],
+      selectedStream?.status === "live"
+        ? selectedStream
+        : liveStream ||
+          selectedStream ||
+          state.streams.find((stream) => ["starting", "stopping"].includes(stream.status)) ||
+          state.streams[0],
+    [liveStream, selectedStream, state.streams],
   );
 
   useEffect(() => {
+    if (liveStream && selectedStream?.status !== "live") {
+      setSelectedStreamId(liveStream.id);
+      return;
+    }
     if (activeStream && !selectedStreamId) {
       setSelectedStreamId(activeStream.id);
     }
-  }, [activeStream, selectedStreamId]);
+  }, [activeStream, liveStream, selectedStream, selectedStreamId]);
 
   const activeRecording = state.videos.find(
     (video) => video.stream_id === activeStream?.id && video.status === "recording",
