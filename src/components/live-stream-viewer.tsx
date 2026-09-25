@@ -272,15 +272,15 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     const consumer = await recvTransport.consume(consumerOptions);
     consumerRef.current = consumer;
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = new MediaStream([consumer.track]);
-      await videoRef.current.play().catch(() => undefined);
-    }
-
     await request(`/api/viewer/${session.sessionId}/consumer/${consumer.id}/resume`, {
       method: "POST",
       body: "{}",
     });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = new MediaStream([consumer.track]);
+      await videoRef.current.play().catch(() => undefined);
+    }
 
     if (!isActiveRun(runId)) {
       return;
