@@ -187,17 +187,15 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   );
   const activeStream = useMemo(
     () =>
-      selectedStream?.status === "live"
-        ? selectedStream
-        : liveStream ||
-          selectedStream ||
-          state.streams.find((stream) => ["starting", "stopping"].includes(stream.status)) ||
-          state.streams[0],
+      liveStream ||
+      selectedStream ||
+      state.streams.find((stream) => ["starting", "stopping"].includes(stream.status)) ||
+      state.streams[0],
     [liveStream, selectedStream, state.streams],
   );
 
   useEffect(() => {
-    if (liveStream && selectedStream?.status !== "live") {
+    if (liveStream && selectedStreamId !== liveStream.id) {
       setSelectedStreamId(liveStream.id);
       return;
     }
