@@ -159,6 +159,29 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   async function refreshHealth() {
     const payload = await request<MediaHealth>("/api/health");
     setHealth(payload);
+    return payload;
+  }
+
+  async function createViewerSession(preferredStreamId: string) {
+    try {
+      return await request<ViewerSession>(
+        `/api/streams/${encodeURIComponent(preferredStreamId)}/viewer/session`,
+        { method: "POST", body: "{}" },
+      );
+    } catch (error) {
+      const payload = await refreshHealth().catch(() => null);
+      const fallbackStream = payload?.streams.length === 1 ? payload.streams[0]?.streamId : null;
+
+      if (fallbackStream && fallbackStream !== preferredStreamId) {
+        setMessage(`Using active media stream ${fallbackStream}.`);
+        return request<ViewerSession>(
+          `/api/streams/${encodeURIComponent(fallbackStream)}/viewer/session`,
+          { method: "POST", body: "{}" },
+        );
+      }
+
+      throw error;
+    }
   }
 
   function startViewer() {
@@ -190,10 +213,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     setViewerState("connecting");
     setMessage("Connecting to media server.");
 
-    const session = await request<ViewerSession>(
-      `/api/streams/${encodeURIComponent(streamLabel)}/viewer/session`,
-      { method: "POST", body: "{}" },
-    );
+    const session = await createViewerSession(streamLabel);
 
     if (!isActiveRun(runId)) {
       await request(`/api/viewer/${session.sessionId}`, { method: "DELETE" }).catch(() => undefined);
