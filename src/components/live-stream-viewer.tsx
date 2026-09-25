@@ -45,6 +45,8 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   const transportRef = useRef<Transport | undefined>(undefined);
   const consumerRef = useRef<Consumer | undefined>(undefined);
   const heartbeatRef = useRef<number | undefined>(undefined);
+  const reconnectRef = useRef<number | undefined>(undefined);
+  const viewerRunRef = useRef(0);
   const cleanupSentRef = useRef(false);
 
   const [viewerState, setViewerState] = useState<"idle" | "connecting" | "live" | "error">("idle");
@@ -83,19 +85,46 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     heartbeatRef.current = undefined;
   }
 
-  function startHeartbeat(sessionId: string) {
+  function stopReconnectTimer() {
+    if (reconnectRef.current === undefined) {
+      return;
+    }
+    window.clearTimeout(reconnectRef.current);
+    reconnectRef.current = undefined;
+  }
+
+  function isActiveRun(runId: number) {
+    return viewerRunRef.current === runId;
+  }
+
+  function scheduleReconnect(runId: number, reason: string) {
+    if (!isActiveRun(runId) || reconnectRef.current !== undefined) {
+      return;
+    }
+
+    setViewerState("error");
+    setMessage(reason);
+    reconnectRef.current = window.setTimeout(() => {
+      reconnectRef.current = undefined;
+      if (isActiveRun(runId) && canWatch) {
+        startViewer();
+      }
+    }, 1500);
+  }
+
+  function startHeartbeat(runId: number, sessionId: string) {
     stopHeartbeat();
     heartbeatRef.current = window.setInterval(() => {
-      if (cleanupSentRef.current) {
+      if (cleanupSentRef.current || !isActiveRun(runId)) {
         return;
       }
       void request(`/api/viewer/${sessionId}/ping`, { method: "POST", body: "{}" }).catch(() => {
-        setMessage("Viewer heartbeat failed.");
+        scheduleReconnect(runId, "Viewer heartbeat failed. Reconnecting.");
       });
     }, 5000);
   }
 
-  async function stopViewer() {
+  async function cleanupViewer(notifyServer = true) {
     stopHeartbeat();
     consumerRef.current?.close();
     transportRef.current?.close();
@@ -108,10 +137,20 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
 
     const sessionId = sessionIdRef.current;
     sessionIdRef.current = undefined;
-    if (sessionId && !cleanupSentRef.current) {
+    if (sessionId && notifyServer && !cleanupSentRef.current) {
       cleanupSentRef.current = true;
       await request(`/api/viewer/${sessionId}`, { method: "DELETE" }).catch(() => undefined);
     }
+  }
+
+  async function stopViewer(runId?: number) {
+    if (runId !== undefined && !isActiveRun(runId)) {
+      return;
+    }
+
+    viewerRunRef.current += 1;
+    stopReconnectTimer();
+    await cleanupViewer();
 
     setViewerState("idle");
     setMessage("Viewer stopped.");
@@ -122,12 +161,31 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     setHealth(payload);
   }
 
-  async function startViewer() {
+  function startViewer() {
     if (!streamLabel) {
+      return 0;
+    }
+
+    const runId = viewerRunRef.current + 1;
+    viewerRunRef.current = runId;
+    stopReconnectTimer();
+    void connectViewer(runId).catch((error) => {
+      if (!isActiveRun(runId)) {
+        return;
+      }
+      setViewerState("error");
+      setMessage(error instanceof Error ? error.message : "Viewer failed.");
+      scheduleReconnect(runId, "Viewer failed. Reconnecting.");
+    });
+    return runId;
+  }
+
+  async function connectViewer(runId: number) {
+    await cleanupViewer();
+    if (!isActiveRun(runId)) {
       return;
     }
 
-    await stopViewer();
     cleanupSentRef.current = false;
     setViewerState("connecting");
     setMessage("Connecting to media server.");
@@ -136,8 +194,14 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       `/api/streams/${encodeURIComponent(streamLabel)}/viewer/session`,
       { method: "POST", body: "{}" },
     );
+
+    if (!isActiveRun(runId)) {
+      await request(`/api/viewer/${session.sessionId}`, { method: "DELETE" }).catch(() => undefined);
+      return;
+    }
+
     sessionIdRef.current = session.sessionId;
-    startHeartbeat(session.sessionId);
+    startHeartbeat(runId, session.sessionId);
 
     const device = new Device();
     await device.load({ routerRtpCapabilities: session.routerRtpCapabilities });
@@ -146,6 +210,10 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       `/api/viewer/${session.sessionId}/transport`,
       { method: "POST", body: "{}" },
     );
+
+    if (!isActiveRun(runId)) {
+      return;
+    }
 
     const recvTransport = device.createRecvTransport(transportOptions);
     transportRef.current = recvTransport;
@@ -158,9 +226,11 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     });
 
     recvTransport.on("connectionstatechange", (state) => {
+      if (!isActiveRun(runId)) {
+        return;
+      }
       if (state === "failed" || state === "closed") {
-        setViewerState("error");
-        setMessage("Viewer transport disconnected.");
+        scheduleReconnect(runId, "Viewer transport disconnected. Reconnecting.");
       }
     });
 
@@ -175,6 +245,10 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       },
     );
 
+    if (!isActiveRun(runId)) {
+      return;
+    }
+
     const consumer = await recvTransport.consume(consumerOptions);
     consumerRef.current = consumer;
 
@@ -188,6 +262,10 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       body: "{}",
     });
 
+    if (!isActiveRun(runId)) {
+      return;
+    }
+
     setViewerState("live");
     setMessage("Live WebRTC stream connected.");
     void refreshHealth().catch(() => undefined);
@@ -200,13 +278,10 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       return;
     }
 
-    void startViewer().catch((error) => {
-      setViewerState("error");
-      setMessage(error instanceof Error ? error.message : "Viewer failed.");
-    });
+    const runId = startViewer();
 
     return () => {
-      void stopViewer();
+      void stopViewer(runId);
     };
   }, [canWatch, streamLabel, status]);
 
@@ -218,7 +293,6 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
 
     return () => {
       window.clearInterval(timer);
-      void stopViewer();
     };
   }, []);
 
@@ -235,10 +309,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
           type="button"
           disabled={!canWatch || viewerState === "connecting"}
           onClick={() => {
-            void startViewer().catch((error) => {
-              setViewerState("error");
-              setMessage(error instanceof Error ? error.message : "Viewer failed.");
-            });
+            startViewer();
           }}
           title="Reconnect viewer"
         >
