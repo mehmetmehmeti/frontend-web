@@ -37,7 +37,7 @@ export async function subscribeSyncChanges({ signal, onChange, onError }: SyncHa
 
   while (!signal.aborted) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) throw new Error("Sync event connection closed");
     buffer += decoder.decode(value, { stream: true });
     const boundary = buffer.lastIndexOf("\n\n");
     if (boundary < 0) continue;
@@ -47,6 +47,10 @@ export async function subscribeSyncChanges({ signal, onChange, onError }: SyncHa
     for (const block of chunk.split("\n\n")) {
       const eventLine = block.split("\n").find((line) => line.startsWith("event:"));
       const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+      if (eventLine?.trim() === "event: ready") {
+        onChange({});
+        continue;
+      }
       if (!eventLine?.includes("sync-change") || !dataLine) continue;
       try {
         onChange(JSON.parse(dataLine.slice("data:".length).trim()) as SyncChangeEvent);

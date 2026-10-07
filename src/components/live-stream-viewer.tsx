@@ -114,6 +114,8 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
 
   function startHeartbeat(runId: number, sessionId: string) {
     stopHeartbeat();
+    let lastFrames = 0;
+    let lastProgress = performance.now();
     heartbeatRef.current = window.setInterval(() => {
       if (cleanupSentRef.current || !isActiveRun(runId)) {
         return;
@@ -121,6 +123,11 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       void request(`/api/viewer/${sessionId}/ping`, { method: "POST", body: "{}" }).catch(() => {
         scheduleReconnect(runId, "Viewer heartbeat failed. Reconnecting.");
       });
+      const frames = videoRef.current?.getVideoPlaybackQuality().totalVideoFrames || 0;
+      if (frames > lastFrames) { lastFrames = frames; lastProgress = performance.now(); }
+      else if (performance.now() - lastProgress > 15000) {
+        scheduleReconnect(runId, "No video frames received. Reconnecting.");
+      }
     }, 5000);
   }
 
@@ -149,9 +156,11 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     }
 
     viewerRunRef.current += 1;
+    const stoppedRun = viewerRunRef.current;
     stopReconnectTimer();
     await cleanupViewer();
 
+    if (!isActiveRun(stoppedRun)) return;
     setViewerState("idle");
     setMessage("Viewer stopped.");
   }
@@ -163,25 +172,10 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   }
 
   async function createViewerSession(preferredStreamId: string) {
-    try {
       return await request<ViewerSession>(
         `/api/streams/${encodeURIComponent(preferredStreamId)}/viewer/session`,
         { method: "POST", body: "{}" },
       );
-    } catch (error) {
-      const payload = await refreshHealth().catch(() => null);
-      const fallbackStream = payload?.streams.length === 1 ? payload.streams[0]?.streamId : null;
-
-      if (fallbackStream && fallbackStream !== preferredStreamId) {
-        setMessage(`Using active media stream ${fallbackStream}.`);
-        return request<ViewerSession>(
-          `/api/streams/${encodeURIComponent(fallbackStream)}/viewer/session`,
-          { method: "POST", body: "{}" },
-        );
-      }
-
-      throw error;
-    }
   }
 
   function startViewer() {
@@ -249,7 +243,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       if (!isActiveRun(runId)) {
         return;
       }
-      if (state === "failed" || state === "closed") {
+      if (state === "failed" || state === "closed" || state === "disconnected") {
         scheduleReconnect(runId, "Viewer transport disconnected. Reconnecting.");
       }
     });
@@ -270,12 +264,18 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     }
 
     const consumer = await recvTransport.consume(consumerOptions);
+    if (!isActiveRun(runId)) {
+      consumer.close();
+      return;
+    }
     consumerRef.current = consumer;
 
     await request(`/api/viewer/${session.sessionId}/consumer/${consumer.id}/resume`, {
       method: "POST",
       body: "{}",
     });
+
+    if (!isActiveRun(runId)) return;
 
     if (videoRef.current) {
       videoRef.current.srcObject = new MediaStream([consumer.track]);
@@ -301,7 +301,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
     const runId = startViewer();
 
     return () => {
-      void stopViewer(runId);
+      void stopViewer();
     };
   }, [canWatch, streamLabel, status]);
 
@@ -322,7 +322,7 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       <div className="viewer-toolbar">
         <span className={health?.ok ? "media-health online" : "media-health"}>
           <PlugZap size={14} />
-          {health?.ok ? `${health.streams.length} media stream${health.streams.length === 1 ? "" : "s"}` : "media server"}
+          {health?.ok ? "WebRTC" : "Media unavailable"}
         </span>
         <button
           className="viewer-tool-button"
@@ -332,17 +332,9 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
             startViewer();
           }}
           title="Reconnect viewer"
+          aria-label="Reconnect viewer"
         >
           <RefreshCw size={14} />
-        </button>
-        <button
-          className="viewer-tool-button"
-          type="button"
-          disabled={viewerState === "idle"}
-          onClick={() => void stopViewer()}
-          title="Stop viewer"
-        >
-          <Square size={14} />
         </button>
       </div>
       {viewerState !== "live" && (
