@@ -1,4 +1,4 @@
-# diploma-2026-frontend-cloud
+# frontend-web
 
 Cloud-side Next.js console for local auth, stream/recording control, database
 sync state, and embedded mediasoup WebRTC viewing.

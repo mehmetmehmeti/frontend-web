@@ -108,7 +108,7 @@ function AuthPanel() {
           <Cloud size={28} />
           <div>
             <h1>Capture Console</h1>
-            <p>Cloud workspace</p>
+            <p>Web workspace</p>
           </div>
         </div>
 
@@ -216,7 +216,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand-row"><span className="brand-symbol"><Radio size={22} /></span><div><h1>Capture Console</h1><p>Cloud workspace</p></div></div>
+        <div className="brand-row"><span className="brand-symbol"><Radio size={22} /></span><div><h1>Capture Console</h1><p>Web workspace</p></div></div>
         <div className="top-actions">
           <span className={isConnected ? "connection connected" : "connection"}><CircleDot size={13} />{isConnected ? "Connected" : "Reconnecting"}</span>
           <span className="account-name">{user.full_name}</span>

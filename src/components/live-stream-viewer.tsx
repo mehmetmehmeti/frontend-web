@@ -10,6 +10,7 @@ import type {
   TransportOptions,
 } from "mediasoup-client/types";
 import { MonitorPlay, PlugZap, Radio, RefreshCw, Square } from "lucide-react";
+import { VideoSurface } from "@/components/video-surface";
 
 const DEFAULT_MEDIA_SERVER_URL = "http://localhost:3010";
 const DEFAULT_VIEWER_TOKEN = "local-viewer-token";
@@ -190,9 +191,8 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
       if (!isActiveRun(runId)) {
         return;
       }
-      setViewerState("error");
-      setMessage(error instanceof Error ? error.message : "Viewer failed.");
-      scheduleReconnect(runId, "Viewer failed. Reconnecting.");
+      const reason = error instanceof Error ? error.message : "Viewer failed.";
+      scheduleReconnect(runId, `${reason} Reconnecting.`);
     });
     return runId;
   }
@@ -317,8 +317,8 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
   }, []);
 
   return (
-    <div className="live-viewer">
-      <video ref={videoRef} className="video-player" controls autoPlay muted playsInline />
+    <VideoSurface className="live-viewer">
+      <video ref={videoRef} className="video-player" autoPlay muted playsInline />
       <div className="viewer-toolbar">
         <span className={health?.ok ? "media-health online" : "media-health"}>
           <PlugZap size={14} />
@@ -347,6 +347,6 @@ export function LiveStreamViewer({ streamId, status }: LiveStreamViewerProps) {
         {viewerState === "live" ? <Radio size={14} /> : <Square size={14} />}
         {viewerState}
       </div>
-    </div>
+    </VideoSurface>
   );
 }
